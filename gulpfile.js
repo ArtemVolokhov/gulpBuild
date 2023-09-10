@@ -14,6 +14,13 @@ const htmlmin = require('gulp-htmlmin')
 const newer = require('gulp-newer')
 const browsersync = require('browser-sync').create()
 const gulppug = require('gulp-pug')
+const webp = require('gulp-webp')
+const gulpWebpHtml = require('gulp-webp-html-nosvg')
+const fs = require('fs')
+const fonter = require('gulp-fonter')
+const ttf2woff2 = require('gulp-ttf2woff2')
+const path = require('path')
+
 
 
 
@@ -32,9 +39,13 @@ const paths = {
       dest: 'dist/js/'
     },
     images: {
-      src: 'src/img/**',
+      src: 'src/img/**/*.{jpg,jpeg,png,gif,webp,svg}',
       dest: 'dist/img/'
-    }
+    }, 
+    fonts: {
+      src: 'src/fonts/',
+      dest: 'dist/fonts/'
+    }, 
   }
 
 
@@ -46,6 +57,7 @@ function clean() {
 function html() {
   return gulp.src(paths.html.src)
   .pipe(gulppug())
+  .pipe(gulpWebpHtml())
   .pipe(htmlmin({ collapseWhitespace: true }))
   .pipe(size({
     showFiles:true
@@ -90,12 +102,41 @@ function scripts() {
 function img() {
   return gulp.src(paths.images.src)
   .pipe(newer(paths.images.dest))
+  .pipe(webp())
+  .pipe(gulp.dest(paths.images.dest))
+  .pipe(gulp.src(paths.images.src))
+  .pipe(newer(paths.images.dest))
   .pipe(imagemin({
     progressive: true
   }))
   .pipe(size())
   .pipe(gulp.dest(paths.images.dest))
 }
+/*Шрифти*/
+function fontsCopy() {
+  return gulp.src(`src/fonts/*.{woff,woff2}`) //шукаємо otf тільки
+  .pipe(gulp.dest(paths.fonts.dest)) // вивантажуємо назад в робочу папку
+}
+
+function otfToTtf() {
+  return gulp.src(`src/fonts/*.otf`) //шукаємо otf тільки
+  .pipe(fonter({
+    formats: ['ttf'] // форматуємо їх в ttf
+  }))
+  .pipe(gulp.dest(paths.fonts.src)) // вивантажуємо назад в робочу папку
+}
+function ttfToWoff() {
+  return gulp.src(`src/fonts/*.ttf`) //беремо ttf (або якийсь новий файл, або той що ми щойно створили з otf) 
+  .pipe(fonter({
+    formats: ['woff'] // форматуємо в woff
+  }))
+  .pipe(gulp.dest(paths.fonts.dest)) // вивантажуємо готовий файл в фінальну папку
+  .pipe(gulp.src(`src/fonts/*.ttf`)) // знову беремо ttf
+  .pipe(ttf2woff2()) //конвертуємо його в woff2
+  .pipe(gulp.dest(paths.fonts.dest)) // додаємо його туди ж в фінальну папку, що і woff
+}
+
+/*Кінець шрифтів*/
 
 
 function watch() {
@@ -104,16 +145,17 @@ function watch() {
         baseDir: "./dist"
     }
   })
-     gulp.watch(paths.html.dest).on('change', browsersync.reload)
+    gulp.watch(paths.html.dest).on('change', browsersync.reload)
     gulp.watch(paths.html.src, html)
     gulp.watch(paths.scripts.src, scripts)
     gulp.watch(paths.styles.src, styles)
-
+    gulp.watch(paths.images.src, img)
   }
 
 const build = gulp.series(clean, html, gulp.parallel(styles, scripts, img), watch)
+const fonts = gulp.series(fontsCopy, otfToTtf, ttfToWoff)
 
-
+exports.fonts = fonts 
 exports.clean = clean
 exports.scripts = scripts
 exports.styles = styles
